@@ -1,0 +1,26 @@
+{
+  "streamers": [
+    {
+      "id": "derstrese",
+      "name": "DerStrese",
+      "modUrl": "/DerStrese/Modoverlay",
+      "overlayUrl": "/DerStrese/overlay-display",
+      "password": "2627",
+      "uploadDir": "uploads/DerStrese/",
+      "twitchClientId": "HIER_DIE_CLIENT_ID_EINFÜGEN",
+      "twitchClientSecret": "HIER_DAS_CLIENT_SECRET_EINFÜGEN",
+      "twitchChannelName": "DerStrese"
+    },
+    {
+      "id": "streamerzwei",
+      "name": "StreamerZwei",
+      "modUrl": "/StreamerZwei/Modoverlay",
+      "overlayUrl": "/StreamerZwei/overlay-display",
+      "password": "2627",
+      "uploadDir": "uploads/StreamerZwei/",
+      "twitchClientId": "ANDERE_CLIENT_ID",
+      "twitchClientSecret": "ANDERES_SECRET",
+      "twitchChannelName": "StreamerZwei"
+    }
+  ]
+}

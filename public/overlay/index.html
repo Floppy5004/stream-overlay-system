@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Stream Overlay Display</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="display-canvas" width="1920" height="1080"></canvas>
+    <div id="media-container">
+        <img id="display-image" class="hidden">
+        <video id="display-video" class="hidden" autoplay muted loop></video>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

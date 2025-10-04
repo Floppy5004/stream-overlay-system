@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mod Overlay Control</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="auth-wall">
+        <div class="auth-box">
+            <h1>Passwortschutz</h1>
+            <p>Bitte gib das Passwort ein, um fortzufahren.</p>
+            <input type="password" id="password-input" placeholder="Passwort...">
+            <button id="password-submit">Anmelden</button>
+            <p id="auth-error" class="error-message"></p>
+        </div>
+    </div>
+
+    <div id="main-content" class="hidden">
+        <header>
+            <h1>🎨 <span id="streamer-name"></span> - Mod Overlay Control</h1>
+            <div id="status-indicator">
+                <span>OBS-Verbindung:</span>
+                <span id="obs-status-light" class="disconnected" title="Keine Verbindung zur OBS Browser-Quelle"></span>
+            </div>
+        </header>
+
+        <main>
+            <section class="card" id="drawing-tool">
+                <h2>🖌️ Zeichentool</h2>
+                <div class="canvas-container">
+                    <canvas id="drawing-canvas" width="1920" height="1080"></canvas>
+                </div>
+                <div class="controls">
+                    <div class="tool-group">
+                        <label>Werkzeuge:</label>
+                        <button class="tool active" data-tool="brush" title="Pinsel">🖌️</button>
+                        <button class="tool" data-tool="circle" title="Kreis (leer)">⭕</button>
+                        <button class="tool" data-tool="filled-circle" title="Kreis (gefüllt)">🔴</button>
+                        <button class="tool" data-tool="rect" title="Rechteck (leer)">🔲</button>
+                        <button class="tool" data-tool="filled-rect" title="Rechteck (gefüllt)">⬛</button>
+                        <button class="tool" data-tool="line" title="Linie">📏</button>
+                        <button class="tool" data-tool="eraser" title="Radierer">Eraser</button>
+                    </div>
+                    <div class="tool-group">
+                        <label for="color-picker">Farbe:</label>
+                        <input type="color" id="color-picker" value="#FF0000">
+                    </div>
+                    <div class="tool-group">
+                        <label for="brush-size">Pinseldicke:</label>
+                        <input type="range" id="brush-size" min="1" max="5" value="2">
+                        <span id="brush-preview">10px</span>
+                    </div>
+                     <div class="tool-group history-controls">
+                        <label>Aktionen:</label>
+                        <button id="undo-btn" title="Rückgängig">↶</button>
+                        <button id="redo-btn" title="Wiederholen">↷</button>
+                        <button id="clear-canvas-btn" title="Canvas löschen">🗑️</button>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <div class="live-toggle">
+                        <label class="switch">
+                            <input type="checkbox" id="live-drawing-toggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span>Live-Zeichnen</span>
+                    </div>
+                    <button id="show-canvas-btn" class="primary-btn">📤 Einblenden</button>
+                    <button id="hide-canvas-btn">📥 Ausblenden</button>
+                </div>
+            </section>
+
+            <section class="card" id="media-uploads">
+                <h2>📁 Medien-Uploads</h2>
+                <div class="upload-form">
+                    <input type="file" id="media-file-input" accept="image/png, image/jpeg, image/gif, video/mp4, video/webm">
+                    <button id="upload-btn">Hochladen</button>
+                    <progress id="upload-progress" value="0" max="100" class="hidden"></progress>
+                </div>
+                <div id="media-list">
+                    <!-- Medien werden hier dynamisch eingefügt -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
