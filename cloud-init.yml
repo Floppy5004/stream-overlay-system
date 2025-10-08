@@ -1,0 +1,84 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+packages:
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - curl
+  - git
+write_files:
+  - path: /tmp/setup-stream-overlay.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -e
+      DOMAIN="DEINE_DOMAIN"
+      EMAIL="DEINE_EMAIL"
+      STREAMER="STREAMER_NAME"
+      PASSWORD="STREAMER_PASSWORD"
+      echo "=== Stream Overlay Setup gestartet ==="
+      curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      apt-get install -y nodejs
+      mkdir -p /opt/stream-overlay
+      cd /opt/stream-overlay
+      git clone https://github.com/Floppy5004/stream-overlay-system.git /tmp/overlay-temp
+      cp -r /tmp/overlay-temp/* /opt/stream-overlay/
+      rm -rf /tmp/overlay-temp
+      mkdir -p /opt/stream-overlay/uploads/${STREAMER,,}
+      mkdir -p /opt/stream-overlay/data
+      cat > /opt/stream-overlay/data/passwords.json << PWEOF
+{
+  "${STREAMER,,}": "$PASSWORD"
+}
+PWEOF
+      npm install
+      cat > /etc/systemd/system/stream-overlay.service << SVCEOF
+[Unit]
+Description=Stream Overlay Server
+After=network.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/stream-overlay
+ExecStart=/usr/bin/node /opt/stream-overlay/server.js
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/stream-overlay/output.log
+StandardError=append:/var/log/stream-overlay/error.log
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+      mkdir -p /var/log/stream-overlay
+      systemctl daemon-reload
+      systemctl enable stream-overlay
+      systemctl start stream-overlay
+      cat > /etc/nginx/sites-available/stream-overlay << 'NGXEOF'
+server {
+    listen 80;
+    server_name DOMAIN_PLACEHOLDER;
+    client_max_body_size 100M;
+    location / {
+        proxy_pass http://localhost:5004;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+NGXEOF
+      sed -i "s/DOMAIN_PLACEHOLDER/$DOMAIN/g" /etc/nginx/sites-available/stream-overlay
+      ln -sf /etc/nginx/sites-available/stream-overlay /etc/nginx/sites-enabled/
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl restart nginx
+      certbot --nginx -d $DOMAIN --non-interactive --agree-tos --email $EMAIL --redirect
+      chown -R www-data:www-data /opt/stream-overlay/uploads
+      echo "=== Setup abgeschlossen! ==="
+      echo "Mod: https://$DOMAIN/${STREAMER}/Modoverlay"
+      echo "OBS: https://$DOMAIN/${STREAMER}/overlay-display"
+runcmd:
+  - /tmp/setup-stream-overlay.sh > /var/log/stream-overlay-setup.log 2>&1
+final_message: "Stream Overlay System bereit! Log: /var/log/stream-overlay-setup.log"
