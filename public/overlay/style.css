@@ -1,26 +1,27 @@
-body, html {
+/* Sorgt für einen transparenten Hintergrund in OBS */
+html, body {
+    background-color: transparent;
     margin: 0;
     padding: 0;
+    overflow: hidden;
     width: 1920px;
     height: 1080px;
-    overflow: hidden;
-    background-color: transparent;
 }
 
-.hidden {
-    display: none !important;
+#scene-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
 }
 
-#display-canvas, #media-container {
+/* Alle Elemente in der Szene werden absolut positioniert */
+#scene-container > * {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    display: block;
 }
 
-#display-image, #display-video {
+/* Videos sollen sich an die Größe ihres Containers anpassen */
+video {
     width: 100%;
     height: 100%;
-    object-fit: contain; /* Stellt sicher, dass das Seitenverhältnis erhalten bleibt */
 }

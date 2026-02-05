@@ -1,0 +1,5 @@
+node_modules/
+uploads/
+public/uploads/
+*.mp4
+*.webm

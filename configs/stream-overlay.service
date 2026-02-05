@@ -1,0 +1,16 @@
+[Unit]
+Description=Stream Overlay Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/stream-overlay
+ExecStart=/usr/bin/node /opt/stream-overlay/server.js
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/stream-overlay/output.log
+StandardError=append:/var/log/stream-overlay/error.log
+
+[Install]
+WantedBy=multi-user.target
