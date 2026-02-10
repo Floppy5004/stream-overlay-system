@@ -2,6 +2,9 @@
 
 Remote overlay control system for Twitch/YouTube streams. Provides a password-protected mod UI to draw, place text/shapes, and manage media uploads, plus a lightweight overlay display for OBS Browser Sources.
 
+## Preview
+![Mod UI Preview](assets/preview.png)
+
 ## Features
 - Password-protected mod control UI per streamer
 - Drawing tools: brush, text, rectangles, circles, eraser; edit mode
@@ -30,3 +33,4 @@ In OBS, add a Browser Source pointing to the overlay display URL.
 - `POST /api/upload/:streamerId` (multipart `mediaFile`)
 - `GET /api/media/:streamerId`
 - `DELETE /api/media/:streamerId/:filename`
+
