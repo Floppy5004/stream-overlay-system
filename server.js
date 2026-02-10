@@ -6,10 +6,24 @@ const fs = require('fs');
 const multer = require('multer');
 
 const app = express();
+if (process.env.TRUST_PROXY === '1') {
+    app.set('trust proxy', 1);
+}
 const server = http.createServer(app);
 const io = new Server(server);
-const PORT = 5004;
-const PASSWORDS = { 'derstrese': '2627' };
+const PORT = Number(process.env.PORT || 5004);
+
+const DEFAULT_PASSWORDS = { 'derstrese': '2627' };
+let PASSWORDS = DEFAULT_PASSWORDS;
+
+if (process.env.PASSWORDS_JSON) {
+    try {
+        const parsed = JSON.parse(process.env.PASSWORDS_JSON);
+        if (parsed && typeof parsed === 'object') PASSWORDS = parsed;
+    } catch (err) {
+        console.warn('Invalid PASSWORDS_JSON, using default PASSWORDS');
+    }
+}
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));

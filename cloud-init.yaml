@@ -1,36 +1,32 @@
 #cloud-config
-# Hetzner Cloud-init für Stream Overlay System
+# Hetzner Cloud-init for Stream Overlay System
 # Ubuntu 24.04 LTS
-# 
-# ANPASSUNGEN VOR DER VERWENDUNG:
-# - DOMAIN: Deine Domain für das Overlay System
-# - EMAIL: Deine E-Mail-Adresse für Let's Encrypt
-# - GITHUB_USER: Optional - dein GitHub Username für SSH-Keys
 #
-# Verwendung:
-# 1. Neuen Hetzner Cloud Server erstellen (mind. CX22)
-# 2. Ubuntu 24.04 als Image wählen
-# 3. Diese Datei als "Cloud-init" einfügen
-# 4. Variablen anpassen
-# 5. Server erstellen
+# Adjust before use:
+# - DOMAIN, EMAIL, STREAMER_ID
+# - PASSWORDS_JSON
+# - (optional) update ssh_import_id with your GitHub user
 #
-# Nach ca. 5-10 Minuten ist das System unter https://DOMAIN erreichbar
+# Usage:
+# 1. Create a Hetzner Cloud server (Ubuntu 24.04)
+# 2. Paste this file into cloud-init
+# 3. Point the DNS A record to the server IP
+# 4. After ~5-10 minutes the system is available
+#
+# Result: https://DOMAIN/<STREAMER_ID>/modoverlay
 
-# ============================================
-# KONFIGURATIONSVARIABLEN - HIER ANPASSEN!
-# ============================================
 write_files:
   - path: /root/.overlay_config
     content: |
       DOMAIN="overlay.example.com"
       EMAIL="your-email@example.com"
-      GITHUB_USER="Floppy5004"
+      STREAMER_ID="derstrese"
       NODE_VERSION="20"
+      PORT="3000"
+      TRUST_PROXY="1"
+      PASSWORDS_JSON='{"derstrese":"2627"}'
     permissions: '0600'
 
-# ============================================
-# SYSTEM-UPDATES UND PAKETE
-# ============================================
 package_update: true
 package_upgrade: true
 
@@ -48,241 +44,188 @@ packages:
   - python3-certbot-nginx
   - nginx
 
-# ============================================
-# BENUTZER UND SSH-KONFIGURATION
-# ============================================
 users:
   - name: overlay
     groups: [sudo, www-data]
     shell: /bin/bash
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
-    # GitHub SSH-Keys importieren (optional)
     ssh_import_id:
-      - gh:Floppy5004
+      - gh:YOUR_GITHUB_USER
 
-# SSH-Konfiguration
 ssh_pwauth: false
 disable_root: true
 
-# ============================================
-# SYSTEM-INITIALISIERUNG
-# ============================================
 runcmd:
-  # Variablen laden
-  - source /root/.overlay_config
-  
-  # Timezone setzen
-  - timedatectl set-timezone Europe/Berlin
-  
-  # ============================================
-  # FIREWALL KONFIGURATION
-  # ============================================
-  - echo "Konfiguriere Firewall..."
-  - ufw --force enable
-  - ufw default deny incoming
-  - ufw default allow outgoing
-  - ufw allow 22/tcp comment 'SSH'
-  - ufw allow 80/tcp comment 'HTTP'
-  - ufw allow 443/tcp comment 'HTTPS'
-  
-  # ============================================
-  # FAIL2BAN KONFIGURATION
-  # ============================================
-  - echo "Konfiguriere Fail2Ban..."
-  - cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
-  - systemctl enable fail2ban
-  - systemctl start fail2ban
-  
-  # ============================================
-  # NODE.JS INSTALLATION
-  # ============================================
-  - echo "Installiere Node.js ${NODE_VERSION}..."
-  - curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
-  - apt-get install -y nodejs
-  - node --version
-  - npm --version
-  
-  # ============================================
-  # PM2 INSTALLATION
-  # ============================================
-  - echo "Installiere PM2..."
-  - npm install -g pm2
-  - pm2 startup systemd -u overlay --hp /home/overlay
-  
-  # ============================================
-  # REPOSITORY KLONEN
-  # ============================================
-  - echo "Klone Repository..."
-  - su - overlay -c "cd ~ && git clone https://github.com/Floppy5004/stream-overlay-system.git"
-  - su - overlay -c "cd ~/stream-overlay-system && npm install"
-  
-  # ============================================
-  # NGINX GRUNDKONFIGURATION
-  # ============================================
-  - echo "Konfiguriere Nginx..."
   - |
+    set -euo pipefail
+    source /root/.overlay_config
+
+    timedatectl set-timezone Europe/Berlin
+
+    echo "Configuring firewall..."
+    ufw --force enable
+    ufw default deny incoming
+    ufw default allow outgoing
+    ufw allow 22/tcp comment 'SSH'
+    ufw allow 80/tcp comment 'HTTP'
+    ufw allow 443/tcp comment 'HTTPS'
+
+    echo "Configuring Fail2Ban..."
+    cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+    systemctl enable fail2ban
+    systemctl start fail2ban
+
+    echo "Installing Node.js ${NODE_VERSION}..."
+    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
+    apt-get install -y nodejs
+    node --version
+    npm --version
+
+    echo "Installing PM2..."
+    npm install -g pm2
+    pm2 startup systemd -u overlay --hp /home/overlay
+
+    echo "Cloning repository..."
+    su - overlay -c "cd ~ && git clone https://github.com/Floppy5004/stream-overlay-system.git"
+    su - overlay -c "cd ~/stream-overlay-system && npm ci"
+
+    echo "Configuring Nginx..."
     cat > /etc/nginx/sites-available/overlay << 'NGINXEOF'
-    # Upstream für Node.js Backend
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
     upstream nodejs_backend {
-        server localhost:3000;
+        server 127.0.0.1:PORT_PLACEHOLDER;
         keepalive 64;
     }
-    
-    # Upstream für WebSocket
-    upstream websocket_backend {
-        server localhost:3001;
-        keepalive 64;
-    }
-    
-    # Rate Limiting Zones
+
     limit_req_zone $binary_remote_addr zone=general:10m rate=10r/s;
     limit_req_zone $binary_remote_addr zone=api:10m rate=30r/s;
-    
-    # HTTP Server - Redirect zu HTTPS
+
     server {
         listen 80;
         listen [::]:80;
         server_name DOMAIN_PLACEHOLDER;
-        
-        # Let's Encrypt Challenge
+
         location /.well-known/acme-challenge/ {
             root /var/www/html;
         }
-        
-        # Alles andere zu HTTPS umleiten
+
         location / {
             return 301 https://$server_name$request_uri;
         }
     }
-    
-    # HTTPS Server
+
     server {
         listen 443 ssl http2;
         listen [::]:443 ssl http2;
         server_name DOMAIN_PLACEHOLDER;
-        
-        # SSL Zertifikate (werden von Certbot automatisch eingefügt)
+
         # ssl_certificate /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/fullchain.pem;
         # ssl_certificate_key /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/privkey.pem;
-        
-        # SSL-Konfiguration
+
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_ciphers HIGH:!aNULL:!MD5;
         ssl_prefer_server_ciphers on;
         ssl_session_cache shared:SSL:10m;
         ssl_session_timeout 10m;
-        
-        # Security Headers
+
+        client_max_body_size 200m;
+
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-XSS-Protection "1; mode=block" always;
-        
-        # Logging
+
         access_log /var/log/nginx/overlay_access.log;
         error_log /var/log/nginx/overlay_error.log;
-        
-        # Gzip Compression
+
         gzip on;
         gzip_vary on;
         gzip_min_length 1024;
         gzip_types text/plain text/css text/xml text/javascript application/javascript application/json application/xml+rss;
-        
-        # Root Location - Node.js Backend
-        location / {
-            limit_req zone=general burst=20 nodelay;
-            
+
+        location /socket.io/ {
             proxy_pass http://nodejs_backend;
             proxy_http_version 1.1;
-            
+
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-            
+
             proxy_buffering off;
             proxy_cache_bypass $http_upgrade;
             proxy_redirect off;
-            
-            # Timeouts
-            proxy_connect_timeout 60s;
-            proxy_send_timeout 60s;
-            proxy_read_timeout 60s;
+
+            proxy_read_timeout 600s;
+            proxy_send_timeout 600s;
         }
-        
-        # WebSocket Location
-        location /ws {
-            proxy_pass http://websocket_backend;
-            proxy_http_version 1.1;
-            
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-            
-            # WebSocket-spezifische Einstellungen
-            proxy_buffering off;
-            proxy_cache_bypass $http_upgrade;
-            proxy_redirect off;
-            
-            # Längere Timeouts für WebSocket
-            proxy_connect_timeout 300s;
-            proxy_send_timeout 300s;
-            proxy_read_timeout 300s;
-        }
-        
-        # API Rate Limiting
+
         location /api/ {
             limit_req zone=api burst=50 nodelay;
-            
+
             proxy_pass http://nodejs_backend;
             proxy_http_version 1.1;
-            
+
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
-            
+
             proxy_connect_timeout 30s;
             proxy_send_timeout 30s;
             proxy_read_timeout 30s;
         }
-        
-        # Static Files mit Caching
+
         location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$ {
             proxy_pass http://nodejs_backend;
             expires 1y;
             add_header Cache-Control "public, immutable";
         }
+
+        location / {
+            limit_req zone=general burst=20 nodelay;
+
+            proxy_pass http://nodejs_backend;
+            proxy_http_version 1.1;
+
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+
+            proxy_buffering off;
+            proxy_cache_bypass $http_upgrade;
+            proxy_redirect off;
+
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
+        }
     }
     NGINXEOF
-  
-  # Domain in Nginx-Konfiguration ersetzen
-  - sed -i "s/DOMAIN_PLACEHOLDER/${DOMAIN}/g" /etc/nginx/sites-available/overlay
-  
-  # Nginx-Konfiguration aktivieren
-  - rm -f /etc/nginx/sites-enabled/default
-  - ln -sf /etc/nginx/sites-available/overlay /etc/nginx/sites-enabled/
-  - nginx -t
-  - systemctl reload nginx
-  
-  # ============================================
-  # SSL-ZERTIFIKAT MIT LET'S ENCRYPT
-  # ============================================
-  - echo "Warte 10 Sekunden für DNS-Propagation..."
-  - sleep 10
-  - echo "Erstelle SSL-Zertifikat für ${DOMAIN}..."
-  - certbot --nginx -d ${DOMAIN} --non-interactive --agree-tos --email ${EMAIL} --redirect || echo "SSL-Zertifikat konnte nicht erstellt werden. Bitte manuell ausführen: sudo certbot --nginx -d ${DOMAIN}"
-  
-  # ============================================
-  # PM2 KONFIGURATION UND START
-  # ============================================
-  - echo "Erstelle PM2 Ecosystem Config..."
-  - |
+
+    sed -i "s/DOMAIN_PLACEHOLDER/${DOMAIN}/g" /etc/nginx/sites-available/overlay
+    sed -i "s/PORT_PLACEHOLDER/${PORT}/g" /etc/nginx/sites-available/overlay
+
+    rm -f /etc/nginx/sites-enabled/default
+    ln -sf /etc/nginx/sites-available/overlay /etc/nginx/sites-enabled/
+    nginx -t
+    systemctl reload nginx
+
+    echo "Waiting for DNS..."
+    sleep 10
+    echo "Requesting SSL certificate..."
+    certbot --nginx -d ${DOMAIN} --non-interactive --agree-tos --email ${EMAIL} --redirect || echo "SSL issuance failed. Run: sudo certbot --nginx -d ${DOMAIN}"
+
+    echo "Creating PM2 ecosystem config..."
     cat > /home/overlay/stream-overlay-system/ecosystem.config.js << 'PM2EOF'
     module.exports = {
       apps: [{
@@ -294,9 +237,7 @@ runcmd:
         watch: false,
         max_memory_restart: '1G',
         env: {
-          NODE_ENV: 'production',
-          PORT: 3000,
-          WS_PORT: 3001
+          NODE_ENV: 'production'
         },
         error_file: '/home/overlay/.pm2/logs/stream-overlay-error.log',
         out_file: '/home/overlay/.pm2/logs/stream-overlay-out.log',
@@ -305,129 +246,86 @@ runcmd:
       }]
     };
     PM2EOF
-  
-  - chown overlay:overlay /home/overlay/stream-overlay-system/ecosystem.config.js
-  
-  # PM2 als overlay-User starten
-  - su - overlay -c "cd ~/stream-overlay-system && pm2 start ecosystem.config.js"
-  - su - overlay -c "pm2 save"
-  - systemctl enable pm2-overlay
-  
-  # ============================================
-  # AUTOMATISCHE UPDATES KONFIGURIEREN
-  # ============================================
-  - echo "Konfiguriere automatische Sicherheitsupdates..."
-  - apt-get install -y unattended-upgrades
-  - dpkg-reconfigure -plow unattended-upgrades
-  
-  # Certbot Auto-Renewal
-  - systemctl enable certbot.timer
-  - systemctl start certbot.timer
-  
-  # ============================================
-  # SYSTEM-INFORMATIONEN
-  # ============================================
-  - |
-    cat > /root/server_info.txt << 'INFOEOF'
+
+    cp /root/.overlay_config /home/overlay/.overlay_config
+    chown overlay:overlay /home/overlay/.overlay_config
+    chmod 600 /home/overlay/.overlay_config
+
+    chown overlay:overlay /home/overlay/stream-overlay-system/ecosystem.config.js
+
+    su - overlay -c "set -a; source ~/.overlay_config; set +a; cd ~/stream-overlay-system && pm2 start ecosystem.config.js"
+    su - overlay -c "pm2 save"
+    systemctl enable pm2-overlay
+
+    echo "Configuring unattended upgrades..."
+    apt-get install -y unattended-upgrades
+    dpkg-reconfigure -f noninteractive unattended-upgrades
+
+    systemctl enable certbot.timer
+    systemctl start certbot.timer
+
+    cat > /root/server_info.txt << INFOEOF
     ========================================
     STREAM OVERLAY SYSTEM
-    Installation abgeschlossen!
     ========================================
-    
-    System-URL: https://DOMAIN_PLACEHOLDER
-    Admin-Panel: https://DOMAIN_PLACEHOLDER/admin
-    
-    SSH-Zugriff:
-    - Benutzer: overlay
-    - Passwort: deaktiviert (nur SSH-Key)
-    
-    PM2-Befehle (als Benutzer 'overlay'):
-    - pm2 status
-    - pm2 logs stream-overlay
-    - pm2 restart stream-overlay
-    - pm2 monit
-    
-    Nginx-Befehle:
-    - sudo nginx -t
-    - sudo systemctl status nginx
-    - sudo systemctl reload nginx
-    
-    SSL-Zertifikat erneuern:
-    - sudo certbot renew
-    - sudo certbot renew --dry-run (Test)
-    
-    Log-Dateien:
-    - PM2: ~/.pm2/logs/
-    - Nginx: /var/log/nginx/
-    - System: sudo journalctl -f
-    
-    Firewall-Status:
-    - sudo ufw status
-    
-    Fail2Ban-Status:
-    - sudo fail2ban-client status
-    
-    ========================================
-    
-    WICHTIG: 
-    1. Stelle sicher, dass der DNS-A-Record für
-       DOMAIN_PLACEHOLDER auf diese Server-IP zeigt
-    
-    2. Falls SSL-Zertifikat nicht erstellt wurde:
-       sudo certbot --nginx -d DOMAIN_PLACEHOLDER
-    
-    3. Backup erstellen:
-       tar -czf overlay-backup.tar.gz \
-         ~/stream-overlay-system \
-         /etc/nginx/sites-available/overlay
-    
+
+    URL:
+      https://${DOMAIN}
+
+    Mod UI:
+      https://${DOMAIN}/${STREAMER_ID}/modoverlay
+
+    Overlay:
+      https://${DOMAIN}/${STREAMER_ID}/overlay-display
+
+    SSH:
+      user: overlay (SSH key only)
+
+    PM2:
+      pm2 status
+      pm2 logs stream-overlay
+      pm2 restart stream-overlay
+
+    Nginx:
+      sudo nginx -t
+      sudo systemctl reload nginx
+
+    SSL:
+      sudo certbot renew
+      sudo certbot renew --dry-run
+
+    Logs:
+      PM2: ~/.pm2/logs/
+      Nginx: /var/log/nginx/
+
+    IMPORTANT:
+    - Ensure DNS A record for ${DOMAIN} points to this server.
+    - If SSL failed: sudo certbot --nginx -d ${DOMAIN}
+
     ========================================
     INFOEOF
-  
-  - sed -i "s/DOMAIN_PLACEHOLDER/${DOMAIN}/g" /root/server_info.txt
-  
-  # Server-Informationen anzeigen
-  - cat /root/server_info.txt
-  
-  # ============================================
-  # ABSCHLUSS
-  # ============================================
-  - echo "============================================"
-  - echo "Installation abgeschlossen!"
-  - echo "Server-Informationen: /root/server_info.txt"
-  - echo "System-URL: https://${DOMAIN}"
-  - echo "============================================"
-  
-  # Neustart nach Installation (optional, aber empfohlen)
-  - sleep 5
-  - reboot
 
-# ============================================
-# POWER STATE
-# ============================================
+    cat /root/server_info.txt
+
+    echo "Installation done."
+    sleep 5
+    reboot
+
 power_state:
   delay: now
   mode: reboot
-  message: "Stream Overlay System Installation abgeschlossen - Neustart..."
+  message: "Stream Overlay System setup completed - rebooting..."
   timeout: 30
   condition: true
 
-# ============================================
-# FINAL MESSAGE
-# ============================================
 final_message: |
   ========================================
   Stream Overlay System Installation
   ========================================
-  System wurde erfolgreich eingerichtet!
-  
-  Die Installation dauerte $UPTIME Sekunden.
-  System-Version: $VERSION
-  Timestamp: $TIMESTAMP
-  
-  Nach dem Neustart ist das System bereit.
-  
-  Zugriff: https://DOMAIN
-  
-  Weitere Informationen: /root/server_info.txt
+  Setup completed.
+
+  Access:
+    https://DOMAIN
+
+  More info: /root/server_info.txt
   ========================================
