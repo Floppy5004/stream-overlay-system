@@ -4,6 +4,8 @@ Remote overlay control system for Twitch/YouTube streams. Provides a password-pr
 
 ## Preview
 ![Mod UI Preview](assets/preview.png)
+![Overlay Preview](assets/preview-overlay.png)
+![Short Flow](assets/preview.gif)
 
 ## Features
 - Password-protected mod control UI per streamer
@@ -33,4 +35,5 @@ In OBS, add a Browser Source pointing to the overlay display URL.
 - `POST /api/upload/:streamerId` (multipart `mediaFile`)
 - `GET /api/media/:streamerId`
 - `DELETE /api/media/:streamerId/:filename`
+
 
