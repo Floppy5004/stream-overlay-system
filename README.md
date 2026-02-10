@@ -41,6 +41,13 @@ Operations:
 - Update: `cd ~/stream-overlay-system && git pull && pm2 restart stream-overlay`
 - Logs: `pm2 logs stream-overlay`
 
+## Healthcheck & Monitoring
+- Health endpoint: `GET /health` returns JSON with status, uptime, and timestamp.
+- Local check: `curl -fsS http://127.0.0.1:3000/health`
+- Cloud-init installs a systemd timer `overlay-healthcheck.timer` that checks the endpoint and restarts the app via PM2 if it fails.
+- Status: `systemctl status overlay-healthcheck.timer`
+- Logs: `journalctl -u overlay-healthcheck.service -n 100 --no-pager`
+
 ## Usage
 - Mod UI: `http://localhost:5004/<streamerId>/modoverlay`
 - Overlay display: `http://localhost:5004/<streamerId>/overlay-display`

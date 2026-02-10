@@ -257,6 +257,46 @@ runcmd:
     su - overlay -c "pm2 save"
     systemctl enable pm2-overlay
 
+    echo "Setting up healthcheck..."
+    cat > /usr/local/bin/overlay-healthcheck.sh << 'HCHECK'
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source /root/.overlay_config
+    if ! curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null; then
+        logger -t overlay-healthcheck "Healthcheck failed, restarting PM2 app"
+        su - overlay -c "pm2 restart stream-overlay"
+    else
+        logger -t overlay-healthcheck "Healthcheck ok"
+    fi
+    HCHECK
+    chmod +x /usr/local/bin/overlay-healthcheck.sh
+
+    cat > /etc/systemd/system/overlay-healthcheck.service << 'SVC'
+    [Unit]
+    Description=Stream Overlay Healthcheck
+
+    [Service]
+    Type=oneshot
+    ExecStart=/usr/local/bin/overlay-healthcheck.sh
+    SVC
+
+    cat > /etc/systemd/system/overlay-healthcheck.timer << 'TMR'
+    [Unit]
+    Description=Run Stream Overlay Healthcheck every minute
+
+    [Timer]
+    OnBootSec=90s
+    OnUnitActiveSec=60s
+    AccuracySec=10s
+    Unit=overlay-healthcheck.service
+
+    [Install]
+    WantedBy=timers.target
+    TMR
+
+    systemctl daemon-reload
+    systemctl enable --now overlay-healthcheck.timer
+
     echo "Configuring unattended upgrades..."
     apt-get install -y unattended-upgrades
     dpkg-reconfigure -f noninteractive unattended-upgrades
