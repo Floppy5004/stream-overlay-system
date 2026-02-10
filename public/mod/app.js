@@ -256,7 +256,8 @@ document.addEventListener('DOMContentLoaded', () => {
             x: el.offsetLeft,
             y: el.offsetTop,
             width: el.offsetWidth,
-            height: el.offsetHeight
+            height: el.offsetHeight,
+            volume: parseInt(el.dataset.volume || '100') / 100
         }));
 
         // Temporäres Canvas für Text-Rendering
@@ -354,9 +355,10 @@ document.addEventListener('DOMContentLoaded', () => {
         mediaWrapper.className = 'media-on-canvas';
         mediaWrapper.dataset.src = src;
         mediaWrapper.dataset.isVideo = isVideo;
+        mediaWrapper.dataset.volume = '100';
         const mediaElement = isVideo ? document.createElement('video') : document.createElement('img');
         mediaElement.src = src;
-        if (isVideo) Object.assign(mediaElement, { autoplay: true, loop: true, muted: false });
+        if (isVideo) Object.assign(mediaElement, { autoplay: true, loop: true, muted: false, volume: 1.0 });
         mediaElement.onload = mediaElement.onloadedmetadata = () => {
             const aspectRatio = (mediaElement.videoWidth || mediaElement.naturalWidth) / (mediaElement.videoHeight || mediaElement.naturalHeight);
             const defaultWidth = 320;
@@ -396,6 +398,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
             controls.appendChild(playPauseBtn);
+
+            // --- VOLUME SLIDER ---
+            const volumeContainer = document.createElement('div');
+            volumeContainer.className = 'volume-control';
+            const volumeIcon = document.createElement('span');
+            volumeIcon.textContent = '🔊';
+            volumeIcon.className = 'volume-icon';
+            const volumeSlider = document.createElement('input');
+            volumeSlider.type = 'range';
+            volumeSlider.min = '0';
+            volumeSlider.max = '100';
+            volumeSlider.value = wrapper.dataset.volume || '100';
+            volumeSlider.className = 'volume-slider';
+            const volumeLabel = document.createElement('span');
+            volumeLabel.className = 'volume-label';
+            volumeLabel.textContent = volumeSlider.value + '%';
+            volumeSlider.addEventListener('input', (ev) => {
+                ev.stopPropagation();
+                const vol = parseInt(ev.target.value);
+                wrapper.dataset.volume = vol;
+                media.volume = vol / 100;
+                volumeLabel.textContent = vol + '%';
+                volumeIcon.textContent = vol === 0 ? '🔇' : vol < 50 ? '🔉' : '🔊';
+            });
+            volumeSlider.addEventListener('mousedown', (ev) => ev.stopPropagation());
+            volumeContainer.appendChild(volumeIcon);
+            volumeContainer.appendChild(volumeSlider);
+            volumeContainer.appendChild(volumeLabel);
+            controls.appendChild(volumeContainer);
+            // --- END VOLUME SLIDER ---
         }
         wrapper.appendChild(media);
         wrapper.appendChild(controls);

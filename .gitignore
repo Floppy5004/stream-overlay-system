@@ -3,3 +3,4 @@ uploads/
 public/uploads/
 *.mp4
 *.webm
+*.bak

@@ -35,6 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     element.loop = true;
                     element.muted = false;
                     element.playsInline = true;
+                    if (item.volume !== undefined) {
+                        element.volume = item.volume;
+                    }
                 }
                 const scaleX = 1920 / data.wrapperWidth;
                 const scaleY = 1080 / data.wrapperHeight;
